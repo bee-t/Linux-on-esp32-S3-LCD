@@ -2,10 +2,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#define PB_COLS 75
-#define PB_ROWS 34
-#define PB_WIDTH 1200
-#define PB_HEIGHT 825
+#define PB_COLS 16
+#define PB_ROWS 16
+#define PB_WIDTH 128
+#define PB_HEIGHT 128
 #ifdef __cplusplus
 extern "C" {
 #endif
