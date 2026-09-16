@@ -24,12 +24,12 @@ static PbTerminal current;
 static QueueHandle_t queue;
 
 #define PIN_NUM_MISO -1
-#define PIN_NUM_MOSI 6
-#define PIN_NUM_CLK  4
-#define PIN_NUM_CS   7
-#define PIN_NUM_DC   8
-#define PIN_NUM_RST  10
-#define PIN_NUM_BCKL 9 // Usually 9 for LilyGo T-QT, or -1 if hardwired
+#define PIN_NUM_MOSI 39
+#define PIN_NUM_CLK  40
+#define PIN_NUM_CS   41
+#define PIN_NUM_DC   42
+#define PIN_NUM_RST  38
+#define PIN_NUM_BCKL 14
 
 static spi_device_handle_t spi;
 static uint16_t* framebuffer;
