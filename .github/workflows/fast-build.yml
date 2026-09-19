@@ -1,0 +1,39 @@
+name: Fast Firmware Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.0.2
+          target: esp32s3
+      - name: Build esp-hosted
+        run: |
+          mkdir -p build/esp-hosted
+          cd build/esp-hosted
+          git clone --recursive -b v0.2.16 https://github.com/espressif/esp-hosted.git esp_hosted_ng
+          cd esp_hosted_ng
+          git apply ../../../patches/02-firmware-network-adapter.patch
+          cp ../../../new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r esp/esp_driver/network_adapter/
+          cp ../../../new-files/esp-hosted/network_adapter/sdkconfig.defaults.esp32s3.16m8r esp/esp_driver/network_adapter/
+          mkdir -p esp/esp_driver/network_adapter/components/epdiy
+          cp -a ../../../paperboard/epdiy/. esp/esp_driver/network_adapter/components/epdiy/
+          cp ../../../paperboard/linux/pb_console.c esp/esp_driver/network_adapter/main/
+          cp ../../../paperboard/common/terminal.c ../../../paperboard/common/font8x8_basic.h esp/esp_driver/network_adapter/main/
+          cp ../../../paperboard/common/terminal.h esp/esp_driver/network_adapter/main/include/
+          cd esp/esp_driver/network_adapter
+          idf.py build
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-network-adapter
+          path: build/esp-hosted/esp_hosted_ng/esp/esp_driver/network_adapter/build/network_adapter.bin
