@@ -93,8 +93,8 @@ static const lcd_init_cmd_t gc9107_init_cmds[] = {
 };
 
 static void lcd_set_window(spi_device_handle_t spi_handle, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
-    x0 += 2; x1 += 2;
-    y0 += 1; y1 += 1;
+    // No X offset for 240x240
+    // No Y offset for 240x240
     lcd_cmd(spi_handle, 0x2A);
     uint8_t d_x[4] = {x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF};
     lcd_data(spi_handle, d_x, 4);
@@ -133,16 +133,16 @@ static void console_task(void* arg) {
                         uint16_t color = (line & (1 << x)) ? fg : bg;
                         int px = col * 8 + x;
                         int py = row * 8 + y;
-                        framebuffer[py * 128 + px] = (color >> 8) | (color << 8); // GC9107 expects big-endian pixels
+                        framebuffer[py * 240 + px] = (color >> 8) | (color << 8); // GC9107 expects big-endian pixels
                     }
                 }
             }
         }
         
-        lcd_set_window(spi, 0, 0, 127, 127);
+        lcd_set_window(spi, 0, 0, 239, 239);
         spi_transaction_t t;
         memset(&t, 0, sizeof(t));
-        t.length = 128 * 128 * 16;
+        t.length = 240 * 240 * 16;
         t.tx_buffer = framebuffer;
         t.user = (void*)1;
         spi_device_polling_transmit(spi, &t);
@@ -186,7 +186,7 @@ void pb_console_init(void) {
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 128 * 128 * 2 + 8
+        .max_transfer_sz = 240 * 240 * 2 + 8
     };
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 40 * 1000 * 1000, 
@@ -211,11 +211,11 @@ void pb_console_init(void) {
         cmd++;
     }
 
-    framebuffer = heap_caps_malloc(128 * 128 * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+    framebuffer = heap_caps_malloc(240 * 240 * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     configASSERT(framebuffer);
 
     pb_init(&current);
-    const char* banner = "GC9107 128x128\r\nLinux on ESP32-S3\r\n\r\n";
+    const char* banner = "ST7789 240x240\r\nLinux on ESP32-S3\r\n\r\n";
     pb_feed(&current, (const uint8_t*)banner, strlen(banner));
     
     queue = xQueueCreate(8, sizeof(struct chunk));
