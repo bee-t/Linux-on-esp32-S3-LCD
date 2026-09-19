@@ -17,21 +17,13 @@ jobs:
         run: |
           mkdir -p build/esp-hosted
           cd build/esp-hosted
-          git clone https://github.com/jcmvbkbc/esp-hosted esp_hosted_ng
-          cd esp_hosted_ng
+          git clone https://github.com/jcmvbkbc/esp-hosted .
           git checkout e2f19edab6c5bec988346906412cb8e7443661db
-          git submodule update --init --recursive
-          cd ..
-          cd esp_hosted_ng
-          git apply ../../../patches/02-firmware-network-adapter.patch
-          cp ../../../new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r esp/esp_driver/network_adapter/
-          cp ../../../new-files/esp-hosted/network_adapter/sdkconfig.defaults.esp32s3.16m8r esp/esp_driver/network_adapter/
-          mkdir -p esp/esp_driver/network_adapter/components/epdiy
-          cp -a ../../../paperboard/epdiy/. esp/esp_driver/network_adapter/components/epdiy/
-          cp ../../../paperboard/linux/pb_console.c esp/esp_driver/network_adapter/main/
-          cp ../../../paperboard/common/terminal.c ../../../paperboard/common/font8x8_basic.h esp/esp_driver/network_adapter/main/
-          cp ../../../paperboard/common/terminal.h esp/esp_driver/network_adapter/main/include/
-          cd esp/esp_driver/network_adapter
+          cd esp_hosted_ng/esp/esp_driver
+          git submodule update --init --depth 1
+          cd ../../../..
+          ./new-files/toplevel/apply-local-changes.sh esp-hosted
+          cd build/esp-hosted/esp_hosted_ng/esp/esp_driver/network_adapter
           idf.py set-target esp32s3
           idf.py build
       - name: Upload firmware
