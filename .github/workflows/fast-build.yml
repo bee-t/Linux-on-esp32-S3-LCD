@@ -21,7 +21,7 @@ jobs:
           git checkout e2f19edab6c5bec988346906412cb8e7443661db
           cd esp_hosted_ng/esp/esp_driver
           git submodule update --init --depth 1
-          cd ../../../..
+          cd "$GITHUB_WORKSPACE"
           ./new-files/toplevel/apply-local-changes.sh esp-hosted
           cd build/esp-hosted/esp_hosted_ng/esp/esp_driver/network_adapter
           idf.py set-target esp32s3
