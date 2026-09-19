@@ -132,20 +132,20 @@ static void console_task(void* arg) {
                     for (int x=0; x<8; x++) {
                         uint16_t color = (line & (1 << x)) ? fg : bg;
                         int px = col * 8 + x;
-                        int py = row * 8 + y;
+                        int py = y; // relative to the current row chunk
                         framebuffer[py * 240 + px] = (color >> 8) | (color << 8); // GC9107 expects big-endian pixels
                     }
                 }
             }
+            
+            lcd_set_window(spi, 0, row * 8, 239, row * 8 + 7);
+            spi_transaction_t t;
+            memset(&t, 0, sizeof(t));
+            t.length = 240 * 8 * 16;
+            t.tx_buffer = framebuffer;
+            t.user = (void*)1;
+            spi_device_polling_transmit(spi, &t);
         }
-        
-        lcd_set_window(spi, 0, 0, 239, 239);
-        spi_transaction_t t;
-        memset(&t, 0, sizeof(t));
-        t.length = 240 * 240 * 16;
-        t.tx_buffer = framebuffer;
-        t.user = (void*)1;
-        spi_device_polling_transmit(spi, &t);
         
         last = xTaskGetTickCount();
         pending = false;
@@ -186,7 +186,7 @@ void pb_console_init(void) {
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 240 * 240 * 2 + 8
+        .max_transfer_sz = 240 * 8 * 2 + 8
     };
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 40 * 1000 * 1000, 
@@ -211,7 +211,7 @@ void pb_console_init(void) {
         cmd++;
     }
 
-    framebuffer = heap_caps_malloc(240 * 240 * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+    framebuffer = heap_caps_malloc(240 * 8 * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     configASSERT(framebuffer);
 
     pb_init(&current);
