@@ -17,7 +17,11 @@ jobs:
         run: |
           mkdir -p build/esp-hosted
           cd build/esp-hosted
-          git clone --recursive -b v0.2.16 https://github.com/espressif/esp-hosted.git esp_hosted_ng
+          git clone https://github.com/jcmvbkbc/esp-hosted esp_hosted_ng
+          cd esp_hosted_ng
+          git checkout e2f19edab6c5bec988346906412cb8e7443661db
+          git submodule update --init --recursive
+          cd ..
           cd esp_hosted_ng
           git apply ../../../patches/02-firmware-network-adapter.patch
           cp ../../../new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r esp/esp_driver/network_adapter/
