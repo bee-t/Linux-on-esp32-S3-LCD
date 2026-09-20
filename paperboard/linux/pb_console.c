@@ -170,6 +170,14 @@ void pb_console_init(void) {
     }
     configASSERT(xPortGetCoreID() == 0);
     
+    // GPIO 39-42 are default JTAG pins on ESP32-S3. Must reset to use as SPI/GPIO.
+    gpio_reset_pin(PIN_NUM_MOSI);
+    gpio_reset_pin(PIN_NUM_CLK);
+    gpio_reset_pin(PIN_NUM_CS);
+    gpio_reset_pin(PIN_NUM_DC);
+    gpio_reset_pin(PIN_NUM_RST);
+    gpio_reset_pin(PIN_NUM_BCKL);
+
     gpio_set_direction(PIN_NUM_DC, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_NUM_RST, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_NUM_BCKL, GPIO_MODE_OUTPUT);
