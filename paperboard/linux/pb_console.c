@@ -1,4 +1,4 @@
-// ESP-IDF side of the Paperboard text console for GC9107 LCD display.
+// ESP-IDF side of the text console for Spotpear ESP32-S3-LCD-1.3 (ST7789 240x240).
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,13 +23,14 @@ static volatile const bool headless_build = false;
 static PbTerminal current;
 static QueueHandle_t queue;
 
+// Spotpear ESP32-S3-LCD-1.3 (ST7789 240x240) pin assignments
 #define PIN_NUM_MISO -1
-#define PIN_NUM_MOSI 39
+#define PIN_NUM_MOSI 41
 #define PIN_NUM_CLK  40
-#define PIN_NUM_CS   41
-#define PIN_NUM_DC   42
-#define PIN_NUM_RST  38
-#define PIN_NUM_BCKL 14
+#define PIN_NUM_CS   39
+#define PIN_NUM_DC   38
+#define PIN_NUM_RST  42
+#define PIN_NUM_BCKL  7
 
 static spi_device_handle_t spi;
 static uint16_t* framebuffer;
@@ -70,7 +71,7 @@ typedef struct {
     uint8_t databytes;
 } lcd_init_cmd_t;
 
-static const lcd_init_cmd_t gc9107_init_cmds[] = {
+static const lcd_init_cmd_t st7789_init_cmds[] = {
     {0x11, {0}, 0x80}, // SLPOUT + 120ms delay
     {0x36, {0x08}, 1}, // MADCTL
     {0x3A, {0x05}, 1}, // COLMOD
@@ -200,12 +201,12 @@ void pb_console_init(void) {
     spi_bus_add_device(SPI2_HOST, &devcfg, &spi);
     
     int cmd = 0;
-    while (gc9107_init_cmds[cmd].databytes != 0xff) {
-        lcd_cmd(spi, gc9107_init_cmds[cmd].cmd);
-        if (gc9107_init_cmds[cmd].databytes & 0x1F) {
-            lcd_data(spi, gc9107_init_cmds[cmd].data, gc9107_init_cmds[cmd].databytes & 0x1F);
+    while (st7789_init_cmds[cmd].databytes != 0xff) {
+        lcd_cmd(spi, st7789_init_cmds[cmd].cmd);
+        if (st7789_init_cmds[cmd].databytes & 0x1F) {
+            lcd_data(spi, st7789_init_cmds[cmd].data, st7789_init_cmds[cmd].databytes & 0x1F);
         }
-        if (gc9107_init_cmds[cmd].databytes & 0x80) {
+        if (st7789_init_cmds[cmd].databytes & 0x80) {
             vTaskDelay(pdMS_TO_TICKS(120));
         }
         cmd++;
