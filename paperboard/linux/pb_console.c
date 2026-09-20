@@ -205,8 +205,8 @@ void pb_console_init(void) {
         .pre_cb = lcd_spi_pre_transfer_callback,  
     };
     
-    spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
-    spi_bus_add_device(SPI2_HOST, &devcfg, &spi);
+    spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    spi_bus_add_device(SPI3_HOST, &devcfg, &spi);
     
     int cmd = 0;
     while (st7789_init_cmds[cmd].databytes != 0xff) {
