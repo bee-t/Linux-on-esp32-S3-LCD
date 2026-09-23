@@ -1,4 +1,5 @@
 // ESP-IDF side of the text console for Spotpear ESP32-S3-LCD-1.3 (ST7789 240x240).
+// Uses software (bit-banged) SPI to avoid conflicts with Linux on the other core.
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -7,8 +8,9 @@
 #include "esp_heap_caps.h"
 #include <stdio.h>
 #include "terminal.h"
-#include "driver/spi_master.h"
 #include "driver/gpio.h"
+#include "hal/gpio_ll.h"
+#include "soc/gpio_struct.h"
 
 // Define ESP_PLATFORM for font8x8_basic.h
 #ifndef ESP_PLATFORM
@@ -24,7 +26,6 @@ static PbTerminal current;
 static QueueHandle_t queue;
 
 // Spotpear ESP32-S3-LCD-1.3 (ST7789 240x240) pin assignments
-#define PIN_NUM_MISO -1
 #define PIN_NUM_MOSI 41
 #define PIN_NUM_CLK  40
 #define PIN_NUM_CS   39
@@ -32,37 +33,70 @@ static QueueHandle_t queue;
 #define PIN_NUM_RST  42
 #define PIN_NUM_BCKL  7
 
-static spi_device_handle_t spi;
 static uint16_t* framebuffer;
 
 struct chunk { unsigned len; uint8_t bytes[128]; };
 
-static void lcd_cmd(spi_device_handle_t spi_handle, const uint8_t cmd) {
-    esp_err_t ret;
-    spi_transaction_t t;
-    memset(&t, 0, sizeof(t));
-    t.length = 8;
-    t.tx_buffer = &cmd;
-    t.user = (void*)0; // DC=0 for command
-    ret = spi_device_polling_transmit(spi_handle, &t);
-    configASSERT(ret == ESP_OK);
+// --- Software SPI implementation ---
+// Direct register access for maximum speed bit-banging.
+// GPIO 32-39 are in GPIO.out1, GPIO 40-48 are also in GPIO.out1.
+// GPIO.out1 covers GPIO 32..53.  Bit index = gpio_num - 32.
+
+static inline void pin_high(int gpio) {
+    if (gpio < 32) {
+        GPIO.out_w1ts = (1U << gpio);
+    } else {
+        GPIO.out1_w1ts.val = (1U << (gpio - 32));
+    }
 }
 
-static void lcd_data(spi_device_handle_t spi_handle, const uint8_t *data, int len) {
-    esp_err_t ret;
-    spi_transaction_t t;
+static inline void pin_low(int gpio) {
+    if (gpio < 32) {
+        GPIO.out_w1tc = (1U << gpio);
+    } else {
+        GPIO.out1_w1tc.val = (1U << (gpio - 32));
+    }
+}
+
+// Send a single byte over software SPI (MSB first, CPOL=0 CPHA=0)
+static inline void sw_spi_byte(uint8_t b) {
+    for (int i = 7; i >= 0; i--) {
+        if (b & (1 << i)) {
+            pin_high(PIN_NUM_MOSI);
+        } else {
+            pin_low(PIN_NUM_MOSI);
+        }
+        pin_high(PIN_NUM_CLK);
+        pin_low(PIN_NUM_CLK);
+    }
+}
+
+// Send multiple bytes over software SPI
+static void sw_spi_write(const uint8_t *data, int len) {
+    for (int i = 0; i < len; i++) {
+        sw_spi_byte(data[i]);
+    }
+}
+
+// Send a 16-bit value over software SPI (big-endian)
+static inline void sw_spi_write16(uint16_t val) {
+    sw_spi_byte(val >> 8);
+    sw_spi_byte(val & 0xFF);
+}
+
+static void lcd_cmd(const uint8_t cmd) {
+    pin_low(PIN_NUM_CS);
+    pin_low(PIN_NUM_DC);  // DC=0 for command
+    sw_spi_byte(cmd);
+    pin_high(PIN_NUM_CS);
+}
+
+static void lcd_data(const uint8_t *data, int len) {
     if (len == 0) return;
-    memset(&t, 0, sizeof(t));
-    t.length = len * 8;
-    t.tx_buffer = data;
-    t.user = (void*)1; // DC=1 for data
-    ret = spi_device_polling_transmit(spi_handle, &t);
-    configASSERT(ret == ESP_OK);
-}
-
-static void lcd_spi_pre_transfer_callback(spi_transaction_t *t) {
-    int dc = (int)t->user;
-    gpio_set_level(PIN_NUM_DC, dc);
+    pin_low(PIN_NUM_CS);
+    pin_high(PIN_NUM_DC);  // DC=1 for data
+    sw_spi_write(data, len);
+    pin_high(PIN_NUM_CS);
 }
 
 typedef struct {
@@ -93,16 +127,26 @@ static const lcd_init_cmd_t st7789_init_cmds[] = {
     {0, {0}, 0xff}
 };
 
-static void lcd_set_window(spi_device_handle_t spi_handle, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
-    // No X offset for 240x240
-    // No Y offset for 240x240
-    lcd_cmd(spi_handle, 0x2A);
+static void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+    lcd_cmd(0x2A);
     uint8_t d_x[4] = {x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF};
-    lcd_data(spi_handle, d_x, 4);
-    lcd_cmd(spi_handle, 0x2B);
+    lcd_data(d_x, 4);
+    lcd_cmd(0x2B);
     uint8_t d_y[4] = {y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF};
-    lcd_data(spi_handle, d_y, 4);
-    lcd_cmd(spi_handle, 0x2C);
+    lcd_data(d_y, 4);
+    lcd_cmd(0x2C);
+}
+
+// Push a row of pixel data using software SPI (framebuffer is already byte-swapped)
+static void lcd_push_pixels(const uint16_t* pixels, int count) {
+    pin_low(PIN_NUM_CS);
+    pin_high(PIN_NUM_DC);  // DC=1 for data
+    const uint8_t* raw = (const uint8_t*)pixels;
+    int bytes = count * 2;
+    for (int i = 0; i < bytes; i++) {
+        sw_spi_byte(raw[i]);
+    }
+    pin_high(PIN_NUM_CS);
 }
 
 static void console_task(void* arg) {
@@ -134,18 +178,13 @@ static void console_task(void* arg) {
                         uint16_t color = (line & (1 << x)) ? fg : bg;
                         int px = col * 8 + x;
                         int py = y; // relative to the current row chunk
-                        framebuffer[py * 240 + px] = (color >> 8) | (color << 8); // GC9107 expects big-endian pixels
+                        framebuffer[py * 240 + px] = (color >> 8) | (color << 8); // ST7789 expects big-endian pixels
                     }
                 }
             }
             
-            lcd_set_window(spi, 0, row * 8, 239, row * 8 + 7);
-            spi_transaction_t t;
-            memset(&t, 0, sizeof(t));
-            t.length = 240 * 8 * 16;
-            t.tx_buffer = framebuffer;
-            t.user = (void*)1;
-            spi_device_polling_transmit(spi, &t);
+            lcd_set_window(0, row * 8, 239, row * 8 + 7);
+            lcd_push_pixels(framebuffer, 240 * 8);
         }
         
         last = xTaskGetTickCount();
@@ -178,41 +217,32 @@ void pb_console_init(void) {
     gpio_reset_pin(PIN_NUM_RST);
     gpio_reset_pin(PIN_NUM_BCKL);
 
+    gpio_set_direction(PIN_NUM_MOSI, GPIO_MODE_OUTPUT);
+    gpio_set_direction(PIN_NUM_CLK, GPIO_MODE_OUTPUT);
+    gpio_set_direction(PIN_NUM_CS, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_NUM_DC, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_NUM_RST, GPIO_MODE_OUTPUT);
     gpio_set_direction(PIN_NUM_BCKL, GPIO_MODE_OUTPUT);
 
-    gpio_set_level(PIN_NUM_RST, 0);
+    // Start with CS high (deselected), CLK low
+    pin_high(PIN_NUM_CS);
+    pin_low(PIN_NUM_CLK);
+
+    // Hardware reset
+    pin_low(PIN_NUM_RST);
     vTaskDelay(pdMS_TO_TICKS(120));
-    gpio_set_level(PIN_NUM_RST, 1);
+    pin_high(PIN_NUM_RST);
     vTaskDelay(pdMS_TO_TICKS(120));
 
-    gpio_set_level(PIN_NUM_BCKL, 1); 
+    // Backlight on
+    pin_high(PIN_NUM_BCKL);
 
-    spi_bus_config_t buscfg = {
-        .miso_io_num = PIN_NUM_MISO,
-        .mosi_io_num = PIN_NUM_MOSI,
-        .sclk_io_num = PIN_NUM_CLK,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = 240 * 8 * 2 + 8
-    };
-    spi_device_interface_config_t devcfg = {
-        .clock_speed_hz = 40 * 1000 * 1000, 
-        .mode = 0,                               
-        .spics_io_num = PIN_NUM_CS,               
-        .queue_size = 7,                          
-        .pre_cb = lcd_spi_pre_transfer_callback,  
-    };
-    
-    spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO);
-    spi_bus_add_device(SPI3_HOST, &devcfg, &spi);
-    
+    // Initialize ST7789
     int cmd = 0;
     while (st7789_init_cmds[cmd].databytes != 0xff) {
-        lcd_cmd(spi, st7789_init_cmds[cmd].cmd);
+        lcd_cmd(st7789_init_cmds[cmd].cmd);
         if (st7789_init_cmds[cmd].databytes & 0x1F) {
-            lcd_data(spi, st7789_init_cmds[cmd].data, st7789_init_cmds[cmd].databytes & 0x1F);
+            lcd_data(st7789_init_cmds[cmd].data, st7789_init_cmds[cmd].databytes & 0x1F);
         }
         if (st7789_init_cmds[cmd].databytes & 0x80) {
             vTaskDelay(pdMS_TO_TICKS(120));
