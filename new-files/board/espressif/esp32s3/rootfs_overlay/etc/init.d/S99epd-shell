@@ -1,0 +1,24 @@
+#!/bin/sh
+# Auto-start epd-shell to mirror the console on the LCD display.
+# This runs epd-shell as a background daemon connected to the serial console.
+
+case "$1" in
+start)
+    if [ -c /dev/epd ]; then
+        printf "Starting epd-shell: "
+        # Launch epd-shell in the background. It will relay between
+        # the serial console and the LCD display.
+        epd-shell &
+        echo "OK"
+    else
+        echo "epd-shell: /dev/epd not found, skipping display"
+    fi
+    ;;
+stop)
+    killall epd-shell 2>/dev/null
+    ;;
+*)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac
