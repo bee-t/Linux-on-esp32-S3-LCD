@@ -12,14 +12,14 @@
 #include "hal/gpio_ll.h"
 #include "soc/gpio_struct.h"
 
-// Define ESP_PLATFORM for font8x8_basic.h
+// Define ESP_PLATFORM for font6x8.h
 #ifndef ESP_PLATFORM
 #define ESP_PLATFORM
 #endif
 #ifndef PB_FONT_STORAGE
 #define PB_FONT_STORAGE
 #endif
-#include "font8x8_basic.h"
+#include "font6x8.h"
 
 static volatile const bool headless_build = false;
 static PbTerminal current;
@@ -164,7 +164,7 @@ static void console_task(void* arg) {
         for (int row=0; row<PB_ROWS; row++) {
             for (int col=0; col<PB_COLS; col++) {
                 PbCell cell = current.cells[row][col];
-                unsigned char const* glyph = font8x8_basic[cell.ch < 128 ? cell.ch : '?'];
+                unsigned char const* glyph = font6x8[cell.ch < 128 ? cell.ch : '?'];
                 uint16_t bg = cell.inverse ? 0xFFFF : 0x0000;
                 uint16_t fg = cell.inverse ? 0x0000 : 0xFFFF;
                 if (current.cursor_visible && current.x == col && current.y == row) {
@@ -174,9 +174,9 @@ static void console_task(void* arg) {
                 
                 for (int y=0; y<8; y++) {
                     unsigned char line = glyph[y];
-                    for (int x=0; x<8; x++) {
+                    for (int x=0; x<6; x++) {
                         uint16_t color = (line & (1 << x)) ? fg : bg;
-                        int px = col * 8 + x;
+                        int px = col * 6 + x;
                         int py = y; // relative to the current row chunk
                         framebuffer[py * 240 + px] = (color >> 8) | (color << 8); // ST7789 expects big-endian pixels
                     }

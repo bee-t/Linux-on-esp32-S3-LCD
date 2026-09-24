@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#define PB_COLS 30
+#define PB_COLS 40
 #define PB_ROWS 30
 #define PB_WIDTH 240
 #define PB_HEIGHT 240
