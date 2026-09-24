@@ -68,7 +68,7 @@ esp-hosted)
 		mkdir -p esp/esp_driver/network_adapter/components/epdiy
         cp -a "$LOCAL/paperboard/epdiy/." esp/esp_driver/network_adapter/components/epdiy/
         cp "$LOCAL/paperboard/linux/pb_console.c" esp/esp_driver/network_adapter/main/
-        cp "$LOCAL/paperboard/common/terminal.c" "$LOCAL/paperboard/common/font6x8.h" esp/esp_driver/network_adapter/main/
+        cp "$LOCAL/paperboard/common/terminal.c" "$LOCAL/paperboard/common/font8x8_basic.h" "$LOCAL/paperboard/common/font6x8.h" esp/esp_driver/network_adapter/main/
         cp "$LOCAL/paperboard/common/terminal.h" esp/esp_driver/network_adapter/main/include/
         git add esp/esp_driver/network_adapter/components/epdiy
 		git add esp/esp_driver/network_adapter/main/ \

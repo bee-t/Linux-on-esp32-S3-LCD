@@ -17,10 +17,6 @@ typedef struct {
 } PbTerminal;
 void pb_init(PbTerminal* t);
 void pb_feed(PbTerminal* t, const uint8_t* data, size_t len);
-// Callback generates one differential row: target in high nibble, previous low.
-typedef struct { const PbTerminal *next, *shown; } PbRaster;
-void pb_raster_line(void* context, int y, uint8_t* out);
-void pb_dirty_lines(const PbRaster* r, bool dirty[PB_HEIGHT]);
 #ifdef __cplusplus
 }
 #endif

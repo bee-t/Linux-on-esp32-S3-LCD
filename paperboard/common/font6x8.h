@@ -1,5 +1,5 @@
 #pragma once
-const unsigned char font6x8[256][8] = {
+static const unsigned char PB_FONT_STORAGE font6x8[256][8] = {
     {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     },
